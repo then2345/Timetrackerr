@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react' // Thêm useRef để xử lý click out
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useTimer } from '../hooks/useTimer.js'
 import { task, timeEntry } from '../services/api.js'
@@ -6,6 +6,10 @@ import { formatTime, formatDuration, todayDate, nowDateTime } from '../utils/for
 import styles from './TimerPage.module.css'
 
 const COLORS = ['#4361EE', '#06D6A0', '#EF476F', '#FFD166', '#118AB2', '#073B4C', '#8338EC', '#FB5607']
+
+// --- DATA CẤU HÌNH MẪU CHO CATEGORY VÀ ESTIMATE ---
+const CATEGORIES = ['Study', 'Work', 'Life', 'Exercise', 'Other']
+const ESTIMATES = ['15m', '30m', '45m', '1h 00m','1h 30mm','2h 00m','2h 30m','3h 00m','4h 00m']
 
 export default function TimerPage() {
   const { token } = useAuth()   
@@ -17,10 +21,17 @@ export default function TimerPage() {
   const [todayEntries, setTodayEntries] = useState([])     
   const [starting, setStarting] = useState(false)           
   const [showQuickForm, setShowQuickForm] = useState(false) 
+  
+  // --- CÁC STATE CỦA QUICK FORM ---
   const [quickTitle, setQuickTitle] = useState('')          
   const [quickColor, setQuickColor] = useState(COLORS[0])   
+  const [quickCategory, setQuickCategory] = useState(CATEGORIES[0]) // Mặc định là 'Study'
+  const [quickEstimate, setQuickEstimate] = useState(ESTIMATES[1])  // Mặc định là '30m'
+  
+  // State quản lý xem popover nào đang mở ('color' | 'category' | 'time' | null)
+  const [activePopup, setActivePopup] = useState(null) 
 
-  // --- CÁC STATE VÀ REF MỚI CHO BỘ TÌM KIẾM ---
+  // --- CÁC STATE VÀ REF CHO BỘ TÌM KIẾM ---
   const [searchTerm, setSearchTerm] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef(null)
@@ -29,14 +40,19 @@ export default function TimerPage() {
     loadData()
   }, [token])
 
-  // Xử lý đóng dropdown khi click ra ngoài vùng tìm kiếm
+  // Xử lý đóng dropdown tìm kiếm VÀ các tag popover khi click ra ngoài vùng chọn
   useEffect(() => {
     function handleClickOutside(event) {
+      // Đóng dropdown tìm kiếm task
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false)
-        // Nếu không chọn gì mà bấm ra ngoài, trả lại tên của task đang chọn hiện tại
         const currentTask = tasks.find(t => t.id === selectedTaskId)
         setSearchTerm(currentTask ? currentTask.title : '')
+      }
+
+      // Đóng các popover của Quick Form nếu click ra ngoài khu vực tag
+      if (!event.target.closest(`.${styles.inlinePopupContainer}`)) {
+        setActivePopup(null)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -62,7 +78,6 @@ export default function TimerPage() {
         setActiveEntryId(active.id)
         setSelectedTaskId(active.task_id || '')
         
-        // Đồng bộ hiển thị tên task đang chạy lên ô tìm kiếm
         const activeTask = taskList.find(t => t.id === active.task_id)
         if (activeTask) setSearchTerm(activeTask.title)
       } else {
@@ -74,15 +89,29 @@ export default function TimerPage() {
     }
   }
 
+  // Gửi kèm đầy đủ data Category và Estimate lên API khi tạo
   async function handleQuickCreate(e) {
     e.preventDefault()
     if (!quickTitle.trim()) return
-    const newTask = await task.create(token, { title: quickTitle, color: quickColor })
+    
+    const newTask = await task.create(token, { 
+      title: quickTitle, 
+      color: quickColor,
+      category: quickCategory,
+      estimate_time: quickEstimate
+    })
+    
     setTasks(prev => [...prev, newTask]) 
     setSelectedTaskId(newTask.id)        
-    setSearchTerm(newTask.title) // Tự động điền chữ vừa tạo vào thanh tìm kiếm
+    setSearchTerm(newTask.title) 
+    
+    // Reset form về trạng thái mặc định ban đầu
+    setQuickTitle('')
     setQuickColor(COLORS[0])
+    setQuickCategory(CATEGORIES[0])
+    setQuickEstimate(ESTIMATES[1])
     setShowQuickForm(false)
+    setActivePopup(null)
   }
 
   async function handleStart() {
@@ -116,7 +145,6 @@ export default function TimerPage() {
   const getTaskTitle = (taskId) => tasks.find(t => t.id === taskId)?.title || 'Không rõ'
   const getTaskColor = (taskId) => tasks.find(t => t.id === taskId)?.color || '#6C757D'
 
-  // Bộ lọc danh sách dựa trên từ khóa gõ vào ô tìm kiếm
   const filteredTasks = tasks.filter(t => 
     t.title.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -125,7 +153,6 @@ export default function TimerPage() {
     <div className={styles.page}>
       <div className={styles.timerSection}>
         
-        {/* KHU VỰC THAY THẾ SELECT THÀNH AUTOCOMPLETE SEARCH */}
         <div className={styles.taskRow}>
           <div className={styles.searchContainer} ref={dropdownRef}>
             <input
@@ -138,7 +165,7 @@ export default function TimerPage() {
               onChange={(e) => {
                 setSearchTerm(e.target.value)
                 if (e.target.value === '') {
-                  setSelectedTaskId('') // Nếu xóa hết chữ thì reset ID công việc
+                  setSelectedTaskId('') 
                 }
                 setShowDropdown(true)
               }}
@@ -146,7 +173,6 @@ export default function TimerPage() {
             />
             <span className={styles.arrowDown}>▼</span>
 
-            {/* Danh sách kết quả gợi ý đổ xuống giống Google */}
             {showDropdown && !timer.isRunning && (
               <ul className={styles.dropdownList}>
                 {filteredTasks.length === 0 ? (
@@ -169,7 +195,6 @@ export default function TimerPage() {
             )}
           </div>
 
-          {/* Nút "+" để tạo nhanh công việc mới */}
           {!timer.isRunning && (
             <button className={styles.quickBtn} onClick={() => setShowQuickForm(f => !f)}>
               {showQuickForm ? 'X' : '+'}
@@ -177,7 +202,7 @@ export default function TimerPage() {
           )}
         </div>
 
-        {/* Form tạo nhanh công việc */}
+        {/* --- FORM TẠO NHANH PHIÊN BẢN INLINE BADGES MỚI --- */}
         {showQuickForm && (
           <form className={styles.quickForm} onSubmit={handleQuickCreate}>
             <input
@@ -188,26 +213,100 @@ export default function TimerPage() {
               className={styles.quickInput}
               required
             />
-            <div className={styles.colorRow}>
-              {COLORS.map(c => (
+            
+            {/* Hàng chứa các tag cấu hình nhanh */}
+            <div className={styles.tagRow}>
+              
+              {/* Tag 1: Chọn màu sắc (Gom 8 nút thành 1 nút Popover tròn) */}
+              <div className={styles.inlinePopupContainer}>
                 <button
-                  key={c} type="button"
-                  className={`${styles.colorDot} ${c === quickColor ? styles.colorSelected : ''}`}
-                  style={{ background: c }}
-                  onClick={() => setQuickColor(c)}
+                  type="button"
+                  className={styles.colorTrigger}
+                  style={{ background: quickColor }}
+                  onClick={() => setActivePopup(activePopup === 'color' ? null : 'color')}
                 />
-              ))}
+                {activePopup === 'color' && (
+                  <div className={styles.inlinePopupColors}>
+                    {COLORS.map(c => (
+                      <button
+                        key={c} type="button"
+                        className={`${styles.colorDot} ${c === quickColor ? styles.colorSelected : ''}`}
+                        style={{ background: c }}
+                        onClick={() => {
+                          setQuickColor(c)
+                          setActivePopup(null)
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Tag 2: Chọn Danh mục (Category Badge) */}
+              <div className={styles.inlinePopupContainer}>
+                <button
+                  type="button"
+                  className={styles.tagBadge}
+                  onClick={() => setActivePopup(activePopup === 'category' ? null : 'category')}
+                >
+                  📁 {quickCategory}
+                </button>
+                {activePopup === 'category' && (
+                  <ul className={styles.inlineMenu}>
+                    {CATEGORIES.map(cat => (
+                      <li 
+                        key={cat}
+                        className={cat === quickCategory ? styles.activeOption : ''}
+                        onClick={() => {
+                          setQuickCategory(cat)
+                          setActivePopup(null)
+                        }}
+                      >
+                        {cat}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Tag 3: Chọn Thời gian dự kiến (Estimate Time Badge) */}
+              <div className={styles.inlinePopupContainer}>
+                <button
+                  type="button"
+                  className={styles.tagBadge}
+                  onClick={() => setActivePopup(activePopup === 'time' ? null : 'time')}
+                >
+                  ⏱️ {quickEstimate}
+                </button>
+                {activePopup === 'time' && (
+                  <ul className={styles.inlineMenu}>
+                    {ESTIMATES.map(est => (
+                      <li 
+                        key={est}
+                        className={est === quickEstimate ? styles.activeOption : ''}
+                        onClick={() => {
+                          setQuickEstimate(est)
+                          setActivePopup(null)
+                        }}
+                      >
+                        {est}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
             </div>
+
+            {/* Màu nút chuyển sang xanh dương đồng bộ với Form Chuẩn */}
             <button type="submit" className={styles.quickSave}>Tạo & chọn</button>
           </form>
         )}
 
-        {/* Hiển thị đồng hồ đếm */}
         <div className={`${styles.timerDisplay} ${timer.isRunning ? styles.running : ''}`}>
           {formatTime(timer.seconds)}
         </div>
 
-        {/* Nút bắt đầu / dừng */}
         {timer.isRunning ? (
           <button className={styles.stopBtn} onClick={handleStop}>Dừng lại</button>
         ) : (
@@ -218,7 +317,6 @@ export default function TimerPage() {
         )}
       </div>
 
-      {/* Danh sách bản ghi trong ngày */}
       <div className={styles.logSection}>
         <h3 className={styles.logTitle}>Today</h3>
         {todayEntries.length === 0 ? (

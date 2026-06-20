@@ -8,7 +8,7 @@ import styles from './CalendarPage.module.css'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-const DURATION_OPTIONS = [
+const DEFAULT_DURATION_OPTIONS = [
   { label: '30m', minutes: 30 },
   { label: '1h', minutes: 60 },
   { label: '1h30', minutes: 90 },
@@ -84,6 +84,34 @@ export default function CalendarPage() {
     [currentYear, currentMonth],
   )
 
+  // UX ĐỈNH: Tự động tính toán các Option thời gian nếu Task gốc có thời lượng đặc biệt
+  const dynamicDurationOptions = useMemo(() => {
+    const exists = DEFAULT_DURATION_OPTIONS.some(opt => opt.minutes === formDuration)
+    if (!exists && formDuration) {
+      const hrs = Math.floor(formDuration / 60)
+      const mins = formDuration % 60
+      const label = hrs > 0 ? `${hrs}h${mins > 0 ? mins : ''}` : `${mins}m`
+      return [...DEFAULT_DURATION_OPTIONS, { label, minutes: formDuration }].sort((a, b) => a.minutes - b.minutes)
+    }
+    return DEFAULT_DURATION_OPTIONS
+  }, [formDuration])
+
+  // UX TỰ ĐỘNG KẾ THỪA: Khi chọn Task, tự fill thời gian dự kiến từ Task gốc
+  const handleTaskChange = (taskId) => {
+    setFormTaskId(taskId)
+    if (!taskId) return
+
+    const selectedTask = tasks.find(t => String(t.id) === String(taskId))
+    if (selectedTask) {
+      // Nếu API trả về giây (estimated_duration), đổi sang phút. Nếu trả về phút, lấy luôn.
+      const defaultMinutes = selectedTask.estimated_duration 
+        ? Math.floor(selectedTask.estimated_duration / 60) 
+        : selectedTask.duration || 60
+      
+      setFormDuration(defaultMinutes)
+    }
+  }
+
   function goToPrevMonth() {
     setCurrentMonth(m => {
       if (m === 0) { setCurrentYear(y => y - 1); return 11 }
@@ -138,11 +166,10 @@ export default function CalendarPage() {
     setSubmitting(true)
     try {
       const [hours, minutes] = formStartTime.split(':').map(Number)
-      
       const timeOnly = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
       
       await scheduledTask.create(token, {
-        task_id: Number(formTaskId),           
+        task_id: Number(formTaskId),          
         scheduled_date: selectedDate,          
         start_time: timeOnly,                  
         estimated_duration: formDuration * 60, 
@@ -190,7 +217,7 @@ export default function CalendarPage() {
         ))}
       </div>
 
-      {/* Lưới lịch - 42 ô (6 hàng x 7 cột) */}
+      {/* Lưới lịch */}
       <div className={styles.calendarGrid}>
         {calendarDays.map(({ date, isCurrentMonth }, idx) => {
           const dateStr = formatDate(date)
@@ -199,7 +226,6 @@ export default function CalendarPage() {
           const isTodayDate = isToday(date)
           const isSelected = dateStr === selectedDate
 
-          // Hiện tối đa 3 chấm tròn màu (mỗi màu = 1 công việc)
           const uniqueColors = [...new Set(dayEntries.map(e => getTaskColor(e.task_id)))].slice(0, 3)
           const hasScheduled = dayScheduled.length > 0
 
@@ -211,11 +237,9 @@ export default function CalendarPage() {
             >
               <div className={styles.dayNumber}>{date.getDate()}</div>
               <div className={styles.dayIndicators}>
-                {/* Chấm tròn = có bản ghi thời gian */}
                 {uniqueColors.map((color, ci) => (
                   <span key={ci} className={styles.entryDot} style={{ background: color }} />
                 ))}
-                {/* Gạch ngang = có lịch hẹn */}
                 {hasScheduled && <span className={styles.scheduledDash} />}
               </div>
             </div>
@@ -233,12 +257,12 @@ export default function CalendarPage() {
             </button>
           </div>
 
-          {/* Form tạo lịch hẹn */}
+          {/* Form tạo lịch hẹn dạng hàng ngang tương tự capture.png */}
           {showScheduleForm && (
             <form className={styles.scheduleForm} onSubmit={handleCreateScheduled}>
               <div className={styles.formField}>
                 <label>Công việc</label>
-                <select value={formTaskId} onChange={e => setFormTaskId(e.target.value)} required>
+                <select value={formTaskId} onChange={e => handleTaskChange(e.target.value)} required>
                   <option value="">-- Chọn --</option>
                   {tasks.map(t => (
                     <option key={t.id} value={t.id}>{t.title}</option>
@@ -257,21 +281,24 @@ export default function CalendarPage() {
               <div className={styles.formField}>
                 <label>Thời lượng dự kiến</label>
                 <select value={formDuration} onChange={e => setFormDuration(Number(e.target.value))}>
-                  {DURATION_OPTIONS.map(opt => (
+                  {dynamicDurationOptions.map(opt => (
                     <option key={opt.minutes} value={opt.minutes}>{opt.label}</option>
                   ))}
                 </select>
               </div>
-              <button type="submit" className={styles.submitBtn} disabled={submitting || !formTaskId}>
-                {submitting ? 'Đang lưu...' : 'Thêm lịch'}
-              </button>
-              <button type="button" className={styles.cancelFormBtn} onClick={() => setShowScheduleForm(false)}>
-                Hủy
-              </button>
+              
+              <div className={styles.formActions}>
+                <button type="submit" className={styles.submitBtn} disabled={submitting || !formTaskId}>
+                  {submitting ? 'Đang lưu...' : 'Thêm lịch'}
+                </button>
+                <button type="button" className={styles.cancelFormBtn} onClick={() => setShowScheduleForm(false)}>
+                  Hủy
+                </button>
+              </div>
             </form>
           )}
 
-          {/* Danh sách bản ghi thời gian */}
+          {/* Timeline */}
           <div className={styles.sectionTitle}>Timeline ({selectedDateEntries.length})</div>
           {selectedDateEntries.length === 0 ? (
             <p className={styles.empty}>No record</p>
@@ -290,7 +317,7 @@ export default function CalendarPage() {
             </ul>
           )}
 
-          {/* Danh sách lịch hẹn */}
+          {/* Scheduled */}
           <div className={styles.sectionTitle}>Scheduled ({selectedDateScheduled.length})</div>
           {selectedDateScheduled.length === 0 ? (
             <p className={styles.empty}>No record</p>
@@ -298,7 +325,6 @@ export default function CalendarPage() {
             <ul className={styles.scheduledList}>
               {selectedDateScheduled.map(item => (
                 <li key={item.id} className={`${styles.scheduledItem} ${item.is_completed ? styles.completed : ''}`}>
-                  {/* Checkbox đánh dấu hoàn thành */}
                   <input
                     type="checkbox"
                     className={styles.scheduledCheckbox}
@@ -309,11 +335,8 @@ export default function CalendarPage() {
                   <div className={styles.scheduledInfo}>
                     <span className={styles.scheduledTaskName}>{getTaskTitle(item.task_id)}</span>
                     <span className={styles.scheduledTime}>
-                      {/* Cắt chuỗi start_time để lấy định dạng HH:mm từ 09:00:00 */}
                       {' '}
                       {item.start_time?.slice(0, 5)}
-                      
-                      {/* Chuyển đổi giây thành giờ và phút để hiển thị */}
                       {item.estimated_duration ? (() => {
                         const totalMins = Math.floor(item.estimated_duration / 60);
                         const h = Math.floor(totalMins / 60);
