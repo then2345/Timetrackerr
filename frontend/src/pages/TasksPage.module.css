@@ -199,3 +199,17 @@
   display: block;        /* Ép dòng tiêu đề nằm riêng một dòng */
   margin-bottom: 2px;    /* Tạo khoảng cách nhỏ với phần Category phía dưới */
 }
+/* Class dùng riêng khi Task chuyển sang trạng thái SỬA */
+.editingCard {
+  display: block !important;   /* Tắt Flexbox của card thường để Form xuống dòng tự nhiên */
+  padding: 20px !important;    /* Khoảng cách từ viền ngoài vào các ô nhập liệu (bằng form gốc) */
+}
+
+/* Reset lại cấu trúc Form khi nó nằm inside cái Card sửa tại chỗ */
+.editingCard form {
+  background: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100%;
+}

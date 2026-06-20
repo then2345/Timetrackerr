@@ -90,8 +90,8 @@ export default function TasksPage() {
         <button className={styles.addBtn} onClick={openAdd}>+ Add</button>
       </div>
 
-      {/* Form thêm/sửa công việc */}
-      {showForm && (
+      {/* >>> MÃ CHỈNH SỬA: Form ở đầu trang bây giờ CHỈ hiện khi bấm nút "+ Add" tạo mới (editTask === null) <<< */}
+      {showForm && !editTask && (
         <form className={styles.form} onSubmit={handleSave}>
           <div className={styles.field}>
             <label>Name</label>
@@ -103,66 +103,94 @@ export default function TasksPage() {
             <textarea value={description} onChange={e => setDescription(e.target.value)}
               placeholder="Description" rows={2} />
           </div>
-
-          {/* >>> MÃ MỚI THÊM Ở ĐÂY: Thêm khối Dropdown chọn Category nằm giữa Description và Color <<< */}
           <div className={styles.field}>
             <label>Category</label>
-            <select 
-              value={category} 
-              onChange={e => setCategory(e.target.value)}
-              className={styles.selectInput} 
-            >
+            <select value={category} onChange={e => setCategory(e.target.value)} className={styles.selectInput}>
               {CATEGORIES.map(cat => (
-                <option key={cat.key} value={cat.key}>
-                  {cat.label}
-                </option>
+                <option key={cat.key} value={cat.key}>{cat.label}</option>
               ))}
             </select>
           </div>
-          {/* >>> HẾT MÃ MỚI <<< */}
-
           <div className={styles.field}>
             <label>Color</label>
             <div className={styles.colorPicker}>
               {COLORS.map(c => (
                 <button key={c} type="button"
                   className={`${styles.colorDot} ${c === color ? styles.selected : ''}`}
-                  style={{ background: c }}
-                  onClick={() => setColor(c)} />
+                  style={{ background: c }} onClick={() => setColor(c)} />
               ))}
             </div>
           </div>
           <div className={styles.formActions}>
             <button type="submit" className={styles.saveBtn}>Save</button>
-            <button type="button" className={styles.cancelBtn}
-              onClick={() => setShowForm(false)}>Cancel</button>
+            <button type="button" className={styles.cancelBtn} onClick={() => setShowForm(false)}>Cancel</button>
           </div>
         </form>
       )}
+      {/* >>> HẾT MÃ CHỈNH SỬA <<< */}
 
       {/* Danh sách công việc */}
       <ul className={styles.taskList}>
-        {tasks.map(t => (
-          <li key={t.id} className={styles.taskCard}>
-            {/* Chấm tròn màu công việc */}
-            <span className={styles.dot} style={{ background: t.color }} />
-            {/* Thông tin công việc */}
-            <div className={styles.taskInfo}>
-              <span className={styles.taskTitle}>{t.title}</span>
-              
-              {/* >>> MÃ MỚI THÊM Ở ĐÂY: Hiển thị tag danh mục nhỏ bên cạnh hoặc dưới tiêu đề task <<< */}
-              {t.category && <span className={styles.taskCategory}>{t.category}</span>}
-              {/* >>> HẾT MÃ MỚI <<< */}
+        {tasks.map(t => {
+          // >>> MÃ MỚI THÊM: Kiểm tra xem task này có đang được chọn để SỬA hay không <<<
+          const isEditingThisTask = showForm && editTask && editTask.id === t.id;
+          
+          if (isEditingThisTask) {
+          return (
+            /* Thêm styles.editingCard vào className */
+            <li key={t.id} className={`${styles.taskCard} ${styles.editingCard}`} style={{ borderLeft: `5px solid ${color}` }}>
+              <form onSubmit={handleSave}>
+                <div className={styles.field}>
+                  <label>Name</label>
+                  <input type="text" value={title} onChange={e => setTitle(e.target.value)} required />
+                </div>
+                <div className={styles.field}>
+                  <label>Description</label>
+                  <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+                </div>
+                <div className={styles.field}>
+                  <label>Category</label>
+                  <select value={category} onChange={e => setCategory(e.target.value)} className={styles.selectInput}>
+                    {CATEGORIES.map(cat => (
+                      <option key={cat.key} value={cat.key}>{cat.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.field}>
+                  <label>Color</label>
+                  <div className={styles.colorPicker}>
+                    {COLORS.map(c => (
+                      <button key={c} type="button"
+                        className={`${styles.colorDot} ${c === color ? styles.selected : ''}`}
+                        style={{ background: c }} onClick={() => setColor(c)} />
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.formActions}>
+                  <button type="submit" className={styles.saveBtn}>Save</button>
+                  <button type="button" className={styles.cancelBtn} onClick={() => setShowForm(false)}>Cancel</button>
+                </div>
+              </form>
+            </li>
+          )
+        }
 
-              {t.description && <span className={styles.taskDesc}>{t.description}</span>}
-            </div>
-            {/* Nút hành động */}
-            <div className={styles.taskActions}>
-              <button onClick={() => openEdit(t)} className={styles.editBtn}>Sửa</button>
-              <button onClick={() => handleDelete(t.id)} className={styles.deleteBtn}>Xóa</button>
-            </div>
-          </li>
-        ))}
+          // Trạng thái hiển thị bình thường khi KHÔNG bấm sửa task này
+          return (
+            <li key={t.id} className={styles.taskCard}>
+              <span className={styles.dot} style={{ background: t.color }} />
+              <div className={styles.taskInfo}>
+                <span className={styles.taskTitle}>{t.title}</span>
+                {t.category && <span className={styles.taskCategory}>{t.category}</span>}
+                {t.description && <span className={styles.taskDesc}>{t.description}</span>}
+              </div>
+              <div className={styles.taskActions}>
+                <button onClick={() => openEdit(t)} className={styles.editBtn}>Sửa</button>
+                <button onClick={() => handleDelete(t.id)} className={styles.deleteBtn}>Xóa</button>
+              </div>
+            </li>
+          )
+        })}
         {tasks.length === 0 && <p className={styles.empty}>There are no jobs yet. Click "Add New" to begin.</p>}
       </ul>
     </div>
