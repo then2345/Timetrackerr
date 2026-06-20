@@ -8,7 +8,7 @@ INSERT IGNORE INTO tasks (id, user_id, title, description, color) VALUES
 (4, 1, 'Gym', 'Health and fitness', '#FFD166');
 
 INSERT IGNORE INTO scheduled_tasks 
-(id, user_id, task_id, scheduled_date, start_time, estimated_duration, status, is_completed, deadline) VALUES
+(id, user_id, task_id, scheduled_date, start_time, estimated_time, status, is_completed, deadline) VALUES
 (1, 1, 1, '2026-06-08', '08:00:00', 7200, 'DONE', TRUE, '2026-06-08 12:00:00'),
 (2, 1, 2, '2026-06-08', '14:00:00', 7200, 'DONE', TRUE, '2026-06-08 18:00:00'),
 (3, 1, 2, '2026-06-09', '09:00:00', 7200, 'DONE', TRUE, '2026-06-09 13:00:00'),
@@ -65,7 +65,7 @@ INSERT IGNORE INTO tasks (id, user_id, title, description, category) VALUES
 (20, 2, 'House Cleaning', 'Deep cleaning apartment', 'LIFESTYLE');
 
 -- 3. Lịch trình (Scheduled Tasks)
-INSERT IGNORE INTO scheduled_tasks (id, user_id, task_id, scheduled_date, start_time, estimated_duration, status, is_completed, deadline) VALUES
+INSERT IGNORE INTO scheduled_tasks (id, user_id, task_id, scheduled_date, start_time, estimated_time, status, is_completed, deadline) VALUES
 (13, 2, 5, '2026-05-16', '09:00:00', 7200, 'DONE', TRUE, '2026-05-16 11:00:00'),
 (14, 2, 6, '2026-05-17', '14:00:00', 10800, 'DONE', TRUE, '2026-05-17 17:00:00'),
 (15, 2, 13, '2026-05-18', '10:00:00', 3600, 'DONE', TRUE, '2026-05-18 11:00:00'),

@@ -19,22 +19,23 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    // >>> MÃ CHỈNH SỬA: Lấy thêm trường category từ req.body <<<
-    const { title, description, category, color } = req.body
+    // >>> MÃ CHỈNH SỬA: Lấy thêm trường estimateTime từ req.body <<<
+    const { title, description, category, estimateTime, color } = req.body
     // >>> HẾT MÃ CHỈNH SỬA <<<
 
     if (!title?.trim()) {
       return res.status(400).json({ error: 'Tên công việc không được để trống' })
     }
 
-    // >>> MÃ CHỈNH SỬA: Cập nhật câu lệnh INSERT và mảng tham số để lưu category vào DB <<<
+    // >>> MÃ CHỈNH SỬA: Thêm cột estimate_time vào câu lệnh INSERT và mảng tham số <<<
     const [result] = await pool.execute(
-      'INSERT INTO tasks (user_id, title, description, category, color) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO tasks (user_id, title, description, category, estimate_time, color) VALUES (?, ?, ?, ?, ?, ?)',
       [
         req.user.id, 
         title.trim(), 
         description?.trim() || null, 
-        category || 'STUDY', // Nếu frontend không gửi lên thì mặc định là STUDY
+        category || 'STUDY', 
+        estimateTime || 30, // Nếu frontend không gửi lên thì mặc định là 30 phút
         color || '#4361EE'
       ]
     )
@@ -49,8 +50,8 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    // >>> MÃ CHỈNH SỬA: Lấy thêm trường category từ req.body để cập nhật <<<
-    const { title, description, category, color, is_active } = req.body
+    // >>> MÃ CHỈNH SỬA: Lấy thêm trường estimateTime từ req.body để cập nhật <<<
+    const { title, description, category, estimateTime, color, is_active } = req.body
     // >>> HẾT MÃ CHỈNH SỬA <<<
 
     const [existing] = await pool.execute(
@@ -61,13 +62,14 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Không tìm thấy công việc' })
     }
 
-    // >>> MÃ CHỈNH SỬA: Thêm cập nhật cột category vào câu lệnh UPDATE và mảng giá trị <<<
+    // >>> MÃ CHỈNH SỬA: Cập nhật cột estimate_time vào câu lệnh UPDATE và mảng giá trị <<<
     await pool.execute(
-      'UPDATE tasks SET title = ?, description = ?, category = ?, color = ?, is_active = ? WHERE id = ?',
+      'UPDATE tasks SET title = ?, description = ?, category = ?, estimate_time = ?, color = ?, is_active = ? WHERE id = ?',
       [
         title?.trim() || existing[0].title,
         description ?? existing[0].description,
-        category || existing[0].category, // Nếu không truyền lên thì giữ nguyên giá trị cũ trong DB
+        category || existing[0].category,
+        estimateTime !== undefined ? estimateTime : existing[0].estimate_time, // Giữ nguyên giá trị cũ nếu không truyền lên
         color || existing[0].color,
         is_active !== undefined ? is_active : existing[0].is_active,
         req.params.id,
