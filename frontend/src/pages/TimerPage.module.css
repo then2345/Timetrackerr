@@ -305,3 +305,13 @@
   font-style: italic;
   pointer-events: none;
 }
+
+.taskCategory {
+  font-size: 11px;          /* Giảm cỡ chữ nhỏ xuống hẳn */
+  font-weight: 600;         /* Giữ độ đậm vừa phải để dễ đọc */
+  color: #64748b;           /* Đổi sang màu xám thanh lịch, không bị thô */
+  text-transform: uppercase;/* Giữ viết hoa cho có nét định danh */
+  letter-spacing: 0.5px;    /* Hơi giãn chữ ra một chút nhìn cho hiện đại */
+  display: block;           /* Xuống dòng mượt mà */
+  margin: 2px 0 4px 0;      /* Căn khoảng cách trên dưới cho thoáng */
+}
