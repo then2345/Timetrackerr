@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   description TEXT,  
   color VARCHAR(7) DEFAULT '#4361EE',                           
   category ENUM('STUDY', 'WORK', 'READING', 'SOCIAL', 'ENTERTAINMENT', 'EXERCISE', 'REST', 'OTHERS') DEFAULT 'STUDY',     
+  progress ENUM('TODO', 'IN_PROGRESS', 'PENDING', 'DONE') DEFAULT 'TODO', 
   estimate_time INT DEFAULT 30, 
-  status ENUM('TODO', 'IN_PROGRESS', 'PENDING', 'DONE') DEFAULT 'TODO', 
   is_active BOOLEAN DEFAULT TRUE,           
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE  

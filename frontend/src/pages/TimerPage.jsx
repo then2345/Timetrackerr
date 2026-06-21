@@ -364,7 +364,8 @@ export default function TimerPage() {
                 acc[entry.task_id] = { ...entry, totalDuration: acc[entry.task_id].totalDuration };
               }
               return acc;
-            }, {})).map(entry => (
+            }, {})). reverse()
+            .map(entry => (
               <li key={entry.id} className={styles.logItem}>
                 <span className={styles.dot} style={{ background: getTaskColor(entry.task_id) }} />
                 <span className={styles.logTask}>{entry.task_title || getTaskTitle(entry.task_id)}</span>

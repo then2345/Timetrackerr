@@ -16,7 +16,13 @@ const CATEGORIES = [
   { key: 'OTHERS', label: 'Others' }
 ]
 
-// >>> MÃ MỚI: Cấu hình danh sách các mốc thời gian chuẩn hóa (Value lưu dạng số phút) <<<
+const PROGRESS_OPTIONS = [
+  { key: 'TODO', label: 'To Do' },
+  { key: 'IN_PROGRESS', label: 'In Progress' },
+  { key: 'PENDING', label: 'Pending' },
+  { key: 'DONE', label: 'Done' }
+];
+
 const ESTIMATE_OPTIONS = [
   { value: 15, label: '15m' },
   { value: 30, label: '30m' },
@@ -28,7 +34,6 @@ const ESTIMATE_OPTIONS = [
   { value: 180, label: '3h 00m' },
   { value: 240, label: '4h 00m' }
 ]
-// >>> HẾT MÃ MỚI <<<
 
 export default function TasksPage() {
   const { token } = useAuth()
@@ -39,10 +44,10 @@ export default function TasksPage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState(CATEGORIES[0].key)
-  
-  // >>> MÃ MỚI: Khởi tạo state cho estimateTime (Mặc định chọn 30 phút) <<<
   const [estimateTime, setEstimateTime] = useState(ESTIMATE_OPTIONS[1].value)
-  // >>> HẾT MÃ MỚI <<<
+  
+  // >>> THÊM MỚI: State lưu giá trị Progress đang chọn trên Form <<<
+  const [progress, setProgress] = useState('TODO')
   
   const [color, setColor] = useState(COLORS[0])
 
@@ -58,10 +63,10 @@ export default function TasksPage() {
     setTitle('')
     setDescription('')
     setCategory(CATEGORIES[0].key)
-    
-    // >>> MÃ MỚI: Reset trường thời gian về mặc định khi bấm Add <<<
     setEstimateTime(ESTIMATE_OPTIONS[1].value)
-    // >>> HẾT MÃ MỚI <<<
+    
+    // >>> THÊM MỚI: Reset trạng thái về 'TODO' khi mở form thêm mới <<<
+    setProgress('TODO')
     
     setColor(COLORS[0])
     setShowForm(true)
@@ -72,10 +77,10 @@ export default function TasksPage() {
     setTitle(t.title)
     setDescription(t.description || '')
     setCategory(t.category || CATEGORIES[0].key)
-    
-    // >>> MÃ MỚI: Đổ dữ liệu thời gian cũ vào form khi bấm Sửa (Nếu chưa có thì lấy mặc định) <<<
     setEstimateTime(t.estimateTime || ESTIMATE_OPTIONS[1].value)
-    // >>> HẾT MÃ MỚI <<<
+    
+    // >>> THÊM MỚI: Đổ dữ liệu progress từ Task cũ vào form khi sửa <<<
+    setProgress(t.progress ? t.progress.toUpperCase() : 'TODO')
     
     setColor(t.color)
     setShowForm(true)
@@ -85,12 +90,13 @@ export default function TasksPage() {
     e.preventDefault()
     if (!title.trim()) return
     
-    // Đóng gói dữ liệu bao gồm cả trường estimateTime mới
+    // >>> ĐÃ CẬP NHẬT: Đóng gói thêm trường progress để truyền lên API backend <<<
     const payload = { 
       title, 
       description, 
       category, 
-      estimateTime: Number(estimateTime), // Đảm bảo luôn gửi dạng số
+      estimateTime: Number(estimateTime), 
+      progress, 
       color 
     }
 
@@ -138,7 +144,6 @@ export default function TasksPage() {
             </select>
           </div>
           
-          {/* >>> MÃ MỚI: Thêm dropdown Thời lượng vào Form Tạo mới <<< */}
           <div className={styles.field}>
             <label>Estimate Time</label>
             <select value={estimateTime} onChange={e => setEstimateTime(e.target.value)} className={styles.selectInput}>
@@ -147,7 +152,16 @@ export default function TasksPage() {
               ))}
             </select>
           </div>
-          {/* >>> HẾT MÃ MỚI <<< */}
+
+          {/* >>> BƯỚC 3.3 VỊ TRÍ 1: Thêm dropdown Progress vào Form Tạo mới (Dưới Estimate Time) <<< */}
+          <div className={styles.field}>
+            <label>Progress</label>
+            <select value={progress} onChange={e => setProgress(e.target.value)} className={styles.selectInput}>
+              {PROGRESS_OPTIONS.map(p => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+          </div>
 
           <div className={styles.field}>
             <label>Color</label>
@@ -193,7 +207,6 @@ export default function TasksPage() {
                     </select>
                   </div>
 
-                  {/* >>> MÃ MỚI: Thêm dropdown Thời lượng vào Form Chỉnh sửa <<< */}
                   <div className={styles.field}>
                     <label>Estimate Time</label>
                     <select value={estimateTime} onChange={e => setEstimateTime(e.target.value)} className={styles.selectInput}>
@@ -202,7 +215,16 @@ export default function TasksPage() {
                       ))}
                     </select>
                   </div>
-                  {/* >>> HẾT MÃ MỚI <<< */}
+
+                  {/* >>> BƯỚC 3.3 VỊ TRÍ 2: Thêm dropdown Progress vào Form Sửa tại chỗ <<< */}
+                  <div className={styles.field}>
+                    <label>Progress</label>
+                    <select value={progress} onChange={e => setProgress(e.target.value)} className={styles.selectInput}>
+                      {PROGRESS_OPTIONS.map(p => (
+                        <option key={p.key} value={p.key}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
 
                   <div className={styles.field}>
                     <label>Color</label>
@@ -229,16 +251,21 @@ export default function TasksPage() {
               <span className={styles.dot} style={{ background: t.color }} />
               <div className={styles.taskInfo}>
                 <span className={styles.taskTitle}>{t.title}</span>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '4px', alignItems: 'center' }}>
                   {t.category && <span className={styles.taskCategory}>{t.category}</span>}
                   
-                  {/* >>> MÃ MỚI: Hiển thị nhãn thời lượng dựa trên số phút lưu trong task <<< */}
                   {t.estimateTime && (
                     <span className={styles.taskEstimate} style={{ fontSize: '0.85em', color: '#666' }}>
                       ⏱️ {ESTIMATE_OPTIONS.find(o => o.value === t.estimateTime)?.label || `${t.estimateTime}m`}
                     </span>
                   )}
-                  {/* >>> HẾT MÃ MỚI <<< */}
+
+                  {/* >>> THÊM MỚI: Hiển thị tag Trạng thái công việc nhỏ nhắn ra giao diện chính <<< */}
+                  {t.progress && (
+                    <span className={styles.taskProgressBadge} style={{ fontSize: '0.82em', fontWeight: 'bold', color: '#4361EE', background: '#E8EDFF', padding: '2px 8px', borderRadius: '4px' }}>
+                      {PROGRESS_OPTIONS.find(o => o.key === t.progress.toUpperCase())?.label || t.progress}
+                    </span>
+                  )}
                 </div>
                 {t.description && <span className={styles.taskDesc} style={{ marginTop: '4px', display: 'block' }}>{t.description}</span>}
               </div>
