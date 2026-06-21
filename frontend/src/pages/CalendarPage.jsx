@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { timeEntry, scheduledTask, task } from '../services/api.js'
 import { formatDuration } from '../utils/format-time.js'
@@ -8,12 +8,25 @@ import styles from './CalendarPage.module.css'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-const DEFAULT_DURATION_OPTIONS = [
+const DURATION_OPTIONS = [
   { label: '30m', minutes: 30 },
   { label: '1h', minutes: 60 },
   { label: '1h30', minutes: 90 },
   { label: '2h', minutes: 120 },
   { label: '3h', minutes: 180 },
+]
+
+const CATEGORY_OPTIONS = ['Study', 'Work', 'Exercise', 'Entertainment', 'Personal']
+
+const COLOR_OPTIONS = [
+  '#4C6EF5', 
+  '#0CA678', 
+  '#F03E3E', 
+  '#FAB005', 
+  '#1098AD', 
+  '#0B7285', 
+  '#7048E8', 
+  '#F76707'  
 ]
 
 export default function CalendarPage() {
@@ -29,36 +42,100 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(false)
   const [showScheduleForm, setShowScheduleForm] = useState(false)
 
-  const [formTaskId, setFormTaskId] = useState('')         
+  // --- FULL FORM STATES (Bê nguyên từ Form Gốc + Thêm Date/Time) ---
+  const [formTaskId, setFormTaskId] = useState('new')         
+  const [formTaskName, setFormTaskName] = useState('')
+  const [formScheduledDate, setFormScheduledDate] = useState('') 
   const [formStartTime, setFormStartTime] = useState('09:00') 
   const [formDuration, setFormDuration] = useState(60)    
+  const [formCategory, setFormCategory] = useState('Study')
+  const [formColor, setFormColor] = useState('#4C6EF5')
   const [submitting, setSubmitting] = useState(false)
 
+  // Custom Dropdown Menu States for Task Name Combo-box
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const dropdownRef = useRef(null)
+
+  // Close custom dropdown when clicking outside the element
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Synchronize default start date when a user clicks a calendar cell
+  useEffect(() => {
+    if (selectedDate) {
+      setFormScheduledDate(selectedDate)
+    }
+  }, [selectedDate])
+
+  // Fetch task templates list initially
   useEffect(() => {
     if (!token) return
     task.list(token).then(setTasks).catch(() => {})
   }, [token])
 
-  const fetchMonthData = useCallback(async (year, month) => {
-    if (!token) return
-    setLoading(true)
-    try {
-      const days = getCalendarDays(year, month)
-      const allDates = days.map(d => formatDate(d.date))
-      const from = allDates[0]
-      const to = allDates[allDates.length - 1]
+  // Handle live typing inside Task Name field
+  const handleTaskNameTyping = (value) => {
+    setFormTaskName(value)
+    setIsDropdownOpen(true)
 
-      const [entryList, scheduledList] = await Promise.all([
-        timeEntry.listRange(token, from, to),
-        scheduledTask.listRange(token, from, to),
-      ])
-      setEntries(entryList)
-      setScheduled(scheduledList)
-    } catch {
-    } finally {
-      setLoading(false)
+    // Check if what they typed exactly matches an existing task template
+    const matchedTask = tasks.find(t => t.title?.toLowerCase() === value.toLowerCase().trim())
+    if (matchedTask) {
+      setFormTaskId(matchedTask.id)
+      setFormColor(matchedTask.color || '#4C6EF5')
+      setFormCategory(matchedTask.category || 'Study')
+    } else {
+      // Otherwise, it is treated as a brand new task creation dynamically
+      setFormTaskId('new')
     }
-  }, [token])
+  }
+
+  // Handle explicit selection from custom task dropdown menu
+  const handleSelectTaskTemplate = (selectedTask) => {
+    setFormTaskId(selectedTask.id)
+    setFormTaskName(selectedTask.title || '')
+    setFormColor(selectedTask.color || '#4C6EF5')
+    setFormCategory(selectedTask.category || 'Study')
+    setIsDropdownOpen(false)
+  }
+
+  // Filter tasks based on typing context inside dropdown menu
+  const filteredTasks = useMemo(() => {
+    if (!formTaskName.trim()) return tasks
+    return tasks.filter(t => t.title?.toLowerCase().includes(formTaskName.toLowerCase()))
+  }, [tasks, formTaskName])
+
+  const fetchMonthData = useCallback(async (year, month) => {
+  if (!token) return;
+  setLoading(true);
+  try {
+    // Lấy ngày đầu tháng và cuối tháng theo chuẩn YYYY-MM-DD
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Hàm format này cần trả về YYYY-MM-DD
+    const from = firstDay.toISOString().slice(0, 10);
+    const to = lastDay.toISOString().slice(0, 10);
+
+    const [entryList, scheduledList] = await Promise.all([
+      timeEntry.listRange(token, from, to),
+      scheduledTask.listRange(token, from, to),
+    ]);
+    setEntries(entryList);
+    setScheduled(scheduledList);
+  } catch (err) {
+    console.error("Fetch data error:", err);
+  } finally {
+    setLoading(false);
+  }
+}, [token]);
 
   useEffect(() => {
     fetchMonthData(currentYear, currentMonth)
@@ -83,34 +160,6 @@ export default function CalendarPage() {
     () => getCalendarDays(currentYear, currentMonth),
     [currentYear, currentMonth],
   )
-
-  // UX ĐỈNH: Tự động tính toán các Option thời gian nếu Task gốc có thời lượng đặc biệt
-  const dynamicDurationOptions = useMemo(() => {
-    const exists = DEFAULT_DURATION_OPTIONS.some(opt => opt.minutes === formDuration)
-    if (!exists && formDuration) {
-      const hrs = Math.floor(formDuration / 60)
-      const mins = formDuration % 60
-      const label = hrs > 0 ? `${hrs}h${mins > 0 ? mins : ''}` : `${mins}m`
-      return [...DEFAULT_DURATION_OPTIONS, { label, minutes: formDuration }].sort((a, b) => a.minutes - b.minutes)
-    }
-    return DEFAULT_DURATION_OPTIONS
-  }, [formDuration])
-
-  // UX TỰ ĐỘNG KẾ THỪA: Khi chọn Task, tự fill thời gian dự kiến từ Task gốc
-  const handleTaskChange = (taskId) => {
-    setFormTaskId(taskId)
-    if (!taskId) return
-
-    const selectedTask = tasks.find(t => String(t.id) === String(taskId))
-    if (selectedTask) {
-      // Nếu API trả về giây (estimated_duration), đổi sang phút. Nếu trả về phút, lấy luôn.
-      const defaultMinutes = selectedTask.estimated_duration 
-        ? Math.floor(selectedTask.estimated_duration / 60) 
-        : selectedTask.duration || 60
-      
-      setFormDuration(defaultMinutes)
-    }
-  }
 
   function goToPrevMonth() {
     setCurrentMonth(m => {
@@ -162,28 +211,32 @@ export default function CalendarPage() {
 
   async function handleCreateScheduled(e) {
     e.preventDefault()
-    if (!formTaskId || !selectedDate) return
+    if (!formScheduledDate || !formTaskName.trim()) return
     setSubmitting(true)
     try {
       const [hours, minutes] = formStartTime.split(':').map(Number)
       const timeOnly = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
       
       await scheduledTask.create(token, {
-        task_id: Number(formTaskId),          
-        scheduled_date: selectedDate,          
+        task_id: formTaskId === 'new' ? null : Number(formTaskId),          
+        new_task_title: formTaskId === 'new' ? formTaskName.trim() : undefined,
+        category: formCategory,
+        color: formColor,
+        scheduled_date: formScheduledDate, 
         start_time: timeOnly,                  
-        estimated_duration: formDuration * 60, 
+        estimated_duration: formDuration * 60
       })
       
       setShowScheduleForm(false)
-      setFormTaskId('')
+      setFormTaskId('new')
+      setFormTaskName('')
       setFormStartTime('09:00')
       setFormDuration(60)
       
       await fetchMonthData(currentYear, currentMonth)
     } catch (error) {
-      console.error("Error creating task:", error);
-      alert("Không thể tạo lịch hẹn, hãy kiểm tra Console F12!");
+      console.error("Error creating schedule:", error);
+      alert("Failed to create schedule. Please check your inputs!");
     } finally {
       setSubmitting(false)
     }
@@ -198,26 +251,26 @@ export default function CalendarPage() {
 
   return (
     <div className={styles.page}>
-      {/* Điều hướng tháng */}
+      {/* Month Navigation Control */}
       <div className={styles.monthNav}>
-        <button className={styles.navBtn} onClick={goToPrevMonth} aria-label="Last week">&#8249;</button>
+        <button className={styles.navBtn} onClick={goToPrevMonth} aria-label="Last month">&#8249;</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
           <span className={styles.monthTitle}>
             {getMonthName(currentMonth)}, {currentYear}
           </span>
           <button className={styles.todayBtn} onClick={goToToday}>Today</button>
         </div>
-        <button className={styles.navBtn} onClick={goToNextMonth} aria-label="Next week">&#8250;</button>
+        <button className={styles.navBtn} onClick={goToNextMonth} aria-label="Next month">&#8250;</button>
       </div>
 
-      {/* Tiêu đề các ngày trong tuần */}
+      {/* Weekdays Indicator */}
       <div className={styles.weekdayRow}>
         {WEEKDAYS.map(day => (
           <div key={day} className={styles.weekdayCell}>{day}</div>
         ))}
       </div>
 
-      {/* Lưới lịch */}
+      {/* Main Calendar View Grid */}
       <div className={styles.calendarGrid}>
         {calendarDays.map(({ date, isCurrentMonth }, idx) => {
           const dateStr = formatDate(date)
@@ -247,30 +300,98 @@ export default function CalendarPage() {
         })}
       </div>
 
-      {/* Bảng chi tiết ngày đã chọn */}
+      {/* Day Panel View Operations */}
       {selectedDate && (
         <div className={styles.dayPanel}>
           <div className={styles.dayPanelTitle}>
             <span>{formattedSelectedDate}</span>
             <button className={styles.addBtn} onClick={() => setShowScheduleForm(f => !f)}>
-              {showScheduleForm ? 'Hủy' : '+ New task'}
+              {showScheduleForm ? 'Cancel' : '+ New task'}
             </button>
           </div>
 
-          {/* Form tạo lịch hẹn dạng hàng ngang tương tự capture.png */}
+          {/* FULL FORM LOGIC FROM CAPTURE_2.PNG + ADDED DATE & TIME */}
           {showScheduleForm && (
             <form className={styles.scheduleForm} onSubmit={handleCreateScheduled}>
-              <div className={styles.formField}>
-                <label>Công việc</label>
-                <select value={formTaskId} onChange={e => handleTaskChange(e.target.value)} required>
-                  <option value="">-- Chọn --</option>
-                  {tasks.map(t => (
-                    <option key={t.id} value={t.id}>{t.title}</option>
-                  ))}
-                </select>
+              
+              {/* 1. CUSTOM TASK NAME COMBO-BOX */}
+              <div className={styles.formField} ref={dropdownRef} style={{ position: 'relative' }}>
+                <label>Task Name</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    placeholder="Type name or select template..."
+                    value={formTaskName}
+                    onChange={e => handleTaskNameTyping(e.target.value)}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    required
+                    style={{ width: '100%', paddingRight: '30px' }}
+                  />
+                  <span 
+                    style={{ position: 'absolute', right: '10px', cursor: 'pointer', opacity: 0.6, fontSize: '12px' }}
+                    onClick={() => setIsDropdownOpen(prev => !prev)}
+                  >
+                    ▼
+                  </span>
+                </div>
+
+                {/* Custom Options List */}
+                {isDropdownOpen && filteredTasks.length > 0 && (
+                  <ul style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #ccc',
+                    borderRadius: '6px',
+                    boxShadow: '0px 4px 12px rgba(0,0,0,0.1)',
+                    maxHeight: '160px',
+                    overflowY: 'auto',
+                    zIndex: 100,
+                    margin: '4px 0 0 0',
+                    padding: '6px 0',
+                    listStyle: 'none'
+                  }}>
+                    {filteredTasks.map(t => (
+                      <li
+                        key={t.id}
+                        style={{
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontSize: '14px',
+                          backgroundColor: '#ffffff'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f3f5'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = '#ffffff'}
+                        onClick={() => handleSelectTaskTemplate(t)}
+                      >
+                        <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: t.color || '#ccc' }} />
+                        <span>{t.title}</span>
+                        <span style={{ fontSize: '11px', color: '#868e96', marginLeft: 'auto' }}>({t.category || 'General'})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
+
+              {/* 2. START DATE (ADDED SPECIFICALLY FOR CALENDAR) */}
               <div className={styles.formField}>
-                <label>Thời gian bắt đầu</label>
+                <label>Start Date</label>
+                <input
+                  type="date"
+                  value={formScheduledDate}
+                  onChange={e => setFormScheduledDate(e.target.value)}
+                  required
+                />
+              </div>
+
+              {/* 3. START TIME (ADDED SPECIFICALLY FOR CALENDAR) */}
+              <div className={styles.formField}>
+                <label>Start Time</label>
                 <input
                   type="time"
                   value={formStartTime}
@@ -278,27 +399,72 @@ export default function CalendarPage() {
                   required
                 />
               </div>
+
+              {/* 4. ESTIMATE TIME (FROM ORIGINAL FORM) */}
               <div className={styles.formField}>
-                <label>Thời lượng dự kiến</label>
+                <label>Estimate Time</label>
                 <select value={formDuration} onChange={e => setFormDuration(Number(e.target.value))}>
-                  {dynamicDurationOptions.map(opt => (
+                  {DURATION_OPTIONS.map(opt => (
                     <option key={opt.minutes} value={opt.minutes}>{opt.label}</option>
                   ))}
                 </select>
               </div>
-              
-              <div className={styles.formActions}>
-                <button type="submit" className={styles.submitBtn} disabled={submitting || !formTaskId}>
-                  {submitting ? 'Đang lưu...' : 'Thêm lịch'}
+
+              {/* 5. CATEGORY (FROM ORIGINAL FORM - Locked if Auto-filled) */}
+              <div className={styles.formField}>
+                <label>Category</label>
+                <select 
+                  value={formCategory} 
+                  onChange={e => setFormCategory(e.target.value)}
+                  disabled={formTaskId !== 'new'}
+                >
+                  {CATEGORY_OPTIONS.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 6. COLOR PICKER (FROM ORIGINAL FORM - Locked if Auto-filled) */}
+              <div className={styles.formField}>
+                <label>Color</label>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                  {COLOR_OPTIONS.map(color => (
+                    <button
+                      key={color}
+                      type="button"
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        backgroundColor: color,
+                        border: formColor === color ? '3px solid #1a1a1a' : '1px solid #ccc',
+                        cursor: formTaskId !== 'new' ? 'not-allowed' : 'pointer',
+                        transform: formColor === color ? 'scale(1.15)' : 'none',
+                        transition: 'all 0.2s ease',
+                        opacity: formTaskId !== 'new' && formColor !== color ? 0.4 : 1
+                      }}
+                      onClick={() => {
+                        if (formTaskId === 'new') setFormColor(color)
+                      }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* FORM BUTTON OPERATIONS */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <button type="submit" className={styles.submitBtn} disabled={submitting}>
+                  {submitting ? 'Saving...' : 'Add Schedule'}
                 </button>
                 <button type="button" className={styles.cancelFormBtn} onClick={() => setShowScheduleForm(false)}>
-                  Hủy
+                  Cancel
                 </button>
               </div>
             </form>
           )}
 
-          {/* Timeline */}
+          {/* Timeline List */}
           <div className={styles.sectionTitle}>Timeline ({selectedDateEntries.length})</div>
           {selectedDateEntries.length === 0 ? (
             <p className={styles.empty}>No record</p>
@@ -317,42 +483,43 @@ export default function CalendarPage() {
             </ul>
           )}
 
-          {/* Scheduled */}
+          {/* Scheduled List - Thay đổi từ Checkbox sang Bullet Point */}
           <div className={styles.sectionTitle}>Scheduled ({selectedDateScheduled.length})</div>
           {selectedDateScheduled.length === 0 ? (
             <p className={styles.empty}>No record</p>
           ) : (
             <ul className={styles.scheduledList}>
               {selectedDateScheduled.map(item => (
-                <li key={item.id} className={`${styles.scheduledItem} ${item.is_completed ? styles.completed : ''}`}>
-                  <input
-                    type="checkbox"
-                    className={styles.scheduledCheckbox}
-                    checked={!!item.is_completed}
-                    onChange={() => handleToggleComplete(item)}
-                    aria-label="Đánh dấu hoàn thành"
+                <li key={item.id} className={styles.scheduledItem}>
+                  {/* Dấu chấm đầu dòng thay cho Checkbox */}
+                  <span 
+                    className={styles.bulletDot} 
+                    style={{ backgroundColor: item.task_color || '#4C6EF5' }} 
                   />
+                  
                   <div className={styles.scheduledInfo}>
-                    <span className={styles.scheduledTaskName}>{getTaskTitle(item.task_id)}</span>
+                    <span className={styles.scheduledTaskName}>
+                      {item.task_title || getTaskTitle(item.task_id)}
+                    </span>
                     <span className={styles.scheduledTime}>
-                      {' '}
                       {item.start_time?.slice(0, 5)}
                       {item.estimated_duration ? (() => {
                         const totalMins = Math.floor(item.estimated_duration / 60);
                         const h = Math.floor(totalMins / 60);
                         const m = totalMins % 60;
-                        if (h > 0 && m > 0) return ` (${h}h${m}p)`;
+                        if (h > 0 && m > 0) return ` (${h}h ${m}m)`;
                         if (h > 0) return ` (${h}h)`;
-                        return ` (${m}p)`;
+                        return ` (${m}m)`;
                       })() : ''}
                     </span>
                   </div>
+                  
                   <button
                     className={styles.scheduledDeleteBtn}
                     onClick={() => handleDeleteScheduled(item.id)}
-                    aria-label="Xóa lịch hẹn"
+                    aria-label="Delete schedule"
                   >
-                    Xóa
+                    Delete
                   </button>
                 </li>
               ))}

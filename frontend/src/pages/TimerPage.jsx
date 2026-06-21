@@ -9,7 +9,7 @@ const COLORS = ['#4361EE', '#06D6A0', '#EF476F', '#FFD166', '#118AB2', '#073B4C'
 
 // --- DATA CẤU HÌNH MẪU CHO CATEGORY VÀ ESTIMATE ---
 const CATEGORIES = ['Study', 'Work', 'Life', 'Exercise', 'Other']
-const ESTIMATES = ['15m', '30m', '45m', '1h 00m','1h 30mm','2h 00m','2h 30m','3h 00m','4h 00m']
+const ESTIMATES = ['15m', '30m', '45m', '1h 00m','1h 30m','2h 00m','2h 30m','3h 00m','4h 00m']
 
 export default function TimerPage() {
   const { token } = useAuth()   
