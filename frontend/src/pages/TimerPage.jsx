@@ -67,25 +67,28 @@ export default function TimerPage() {
     setTasks(taskList)
     setTodayEntries(entries)
 
+    // Thay đoạn xử lý "active" trong hàm loadData() bằng đoạn này:
     const active = entries.find(e => !e.end_time)
     if (active) {
       const entryDate = active.start_time.slice(0, 10)
       if (entryDate === todayDate()) {
+        // 1. Tính thời gian phiên hiện tại đang chạy
         const [h, m, s] = active.start_time.slice(11, 19).split(':').map(Number)
         const startMs = new Date().setHours(h, m, s, 0)
         const elapsed = Math.max(0, Math.floor((Date.now() - startMs) / 1000))
-        timer.start(elapsed)
+        
+        // 2. Tính tổng các phiên ĐÃ DỪNG trước đó của task này
+        const totalToday = calculateTotalSecondsForTask(active.task_id, entries.filter(e => e.id !== active.id));
+        
+        // 3. Đếm tổng = (phiên đang chạy) + (các phiên đã dừng)
+        timer.start(totalToday + elapsed)
+        
         setActiveEntryId(active.id)
         setSelectedTaskId(active.task_id || '')
-        
-        const activeTask = taskList.find(t => t.id === active.task_id)
+        const activeTask = tasks.find(t => t.id === active.task_id)
         if (activeTask) setSearchTerm(activeTask.title)
-      } else {
-        const stopTime = entryDate + ' 23:59:59'
-        await timeEntry.update(token, active.id, { end_time: stopTime })
-        const refreshed = await timeEntry.list(token, todayDate())
-        setTodayEntries(refreshed)
       }
+      // ... phần còn lại giữ nguyên
     }
   }
 
@@ -114,24 +117,33 @@ export default function TimerPage() {
     setActivePopup(null)
   }
 
-  async function handleStart() {
-    if (!selectedTaskId) return
-    setStarting(true)
-    try {
-      const entry = await timeEntry.create(token, {
-        task_id: selectedTaskId,
-        start_time: nowDateTime(),
-        date: todayDate()
-      })
-      setActiveEntryId(entry.id)
-      timer.start(0) 
-    } catch (err) {
-      if (err.status === 409) alert('Bạn đã có bản ghi đang chạy')
-    } finally {
-      setStarting(false)
-    }
-  }
+  const calculateTotalSecondsForTask = (taskId, entries) => {
+    return entries
+      .filter(e => e.task_id === taskId && e.end_time) // Chỉ tính các phiên đã dừng
+      .reduce((sum, e) => sum + (e.duration || 0), 0);
+  };
 
+  async function handleStart() {
+  if (!selectedTaskId) return
+  setStarting(true)
+  try {
+    const entry = await timeEntry.create(token, {
+      task_id: selectedTaskId,
+      start_time: nowDateTime(),
+      date: todayDate()
+    })
+    
+    // Tính tổng thời gian đã làm trước đó trong ngày
+    const totalToday = calculateTotalSecondsForTask(selectedTaskId, todayEntries);
+
+    setActiveEntryId(entry.id)
+    timer.start(totalToday) // Bắt đầu đếm tiếp từ tổng cũ
+  } catch (err) {
+    if (err.status === 409) alert('Bạn đã có bản ghi đang chạy')
+  } finally {
+    setStarting(false)
+  }
+  }
   async function handleStop() {
     if (!activeEntryId) return
     await timeEntry.update(token, activeEntryId, { end_time: nowDateTime() })
@@ -140,6 +152,24 @@ export default function TimerPage() {
     setActiveEntryId(null)
     const entries = await timeEntry.list(token, todayDate())
     setTodayEntries(entries)
+  }
+
+  async function handleContinue(entryId) {
+  try {
+    const entry = await timeEntry.continue(token, entryId)
+    
+    // Tính tổng thời gian đã làm của task này trong ngày
+    const totalToday = calculateTotalSecondsForTask(entry.task_id, todayEntries);
+
+    setActiveEntryId(entry.id)
+    setSelectedTaskId(entry.task_id)
+    setSearchTerm(getTaskTitle(entry.task_id))
+    
+    timer.start(totalToday) // Bắt đầu đếm tiếp từ tổng cũ
+  } catch (err) {
+    if (err.status === 409) alert('Bạn đang có phiên khác chạy')
+    else alert('Có lỗi xảy ra')
+  }
   }
 
   const getTaskTitle = (taskId) => tasks.find(t => t.id === taskId)?.title || 'Không rõ'
@@ -319,18 +349,39 @@ export default function TimerPage() {
 
       <div className={styles.logSection}>
         <h3 className={styles.logTitle}>Today</h3>
-        {todayEntries.length === 0 ? (
+        {todayEntries.filter(e => e.end_time).length === 0 ? (
           <p className={styles.empty}>No record</p>
         ) : (
           <ul className={styles.logList}>
-            {todayEntries.filter(e => e.end_time).map(entry => (
+            {/* --- ĐOẠN GOM NHÓM DỮ LIỆU --- */}
+            {Object.values(todayEntries.filter(e => e.end_time).reduce((acc, entry) => {
+              if (!acc[entry.task_id]) {
+                acc[entry.task_id] = { ...entry, totalDuration: 0 };
+              }
+              acc[entry.task_id].totalDuration += (entry.duration || 0);
+              // Lấy bản ghi mới nhất để khi bấm Continue là lấy đúng cái cuối cùng
+              if (new Date(entry.start_time) > new Date(acc[entry.task_id].start_time)) {
+                acc[entry.task_id] = { ...entry, totalDuration: acc[entry.task_id].totalDuration };
+              }
+              return acc;
+            }, {})).map(entry => (
               <li key={entry.id} className={styles.logItem}>
                 <span className={styles.dot} style={{ background: getTaskColor(entry.task_id) }} />
                 <span className={styles.logTask}>{entry.task_title || getTaskTitle(entry.task_id)}</span>
-                <span className={styles.logTime}>
-                  {entry.start_time?.slice(11, 16)} - {entry.end_time?.slice(11, 16)}
+                
+                {/* --- HIỂN THỊ TỔNG THỜI GIAN --- */}
+                <span className={styles.logDuration}>
+                  {formatDuration(entry.totalDuration)}
                 </span>
-                <span className={styles.logDuration}>{formatDuration(entry.duration)}</span>
+
+                <button 
+                  style={{ marginLeft: '10px', cursor: 'pointer', border: 'none', background: 'transparent' }}
+                  onClick={() => handleContinue(entry.id)}
+                  disabled={timer.isRunning}
+                  title="Tiếp tục"
+                >
+                  ▶
+                </button>
               </li>
             ))}
           </ul>

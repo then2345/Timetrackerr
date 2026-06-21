@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   color VARCHAR(7) DEFAULT '#4361EE',                           
   category ENUM('STUDY', 'WORK', 'READING', 'SOCIAL', 'ENTERTAINMENT', 'EXERCISE', 'REST', 'OTHERS') DEFAULT 'STUDY',     
   estimate_time INT DEFAULT 30, 
+  status ENUM('TODO', 'IN_PROGRESS', 'PENDING', 'DONE') DEFAULT 'TODO', 
   is_active BOOLEAN DEFAULT TRUE,           
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE  
@@ -22,22 +23,19 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE TABLE IF NOT EXISTS time_entries (
   id INT AUTO_INCREMENT PRIMARY KEY,        
-  user_id INT NOT NULL,                    
+  user_id INT NOT NULL,                     
   task_id INT,                              
-  start_time DATETIME NOT NULL,             
+  start_time DATETIME NOT NULL,            
   end_time DATETIME NULL,                  
   duration INT DEFAULT 0,                   
-  target_duration INT DEFAULT 0,            
-  pause_count INT DEFAULT 0,                
-  total_pause_time INT DEFAULT 0,           
-  overtime_duration INT DEFAULT 0,          
   mood_after_task ENUM('EXHAUSTED', 'TIRED', 'NORMAL', 'ENERGIZED', 'HAPPY') DEFAULT 'NORMAL', 
-  description TEXT,                        
-  date DATE NOT NULL,                     
+  description TEXT,                         
+  date DATE NOT NULL,                      
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,   
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,       
   FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL       
 );
+
 CREATE TABLE IF NOT EXISTS scheduled_tasks (
   id INT AUTO_INCREMENT PRIMARY KEY,        
   user_id INT NOT NULL,                    
@@ -46,7 +44,6 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
   start_time TIME,                               
   deadline_date DATE NULL,   
   deadline_time TIME NULL,               
-  status ENUM('TODO', 'IN_PROGRESS', 'PENDING', 'DONE') DEFAULT 'TODO', 
   is_completed BOOLEAN DEFAULT FALSE,       
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,   
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,     
