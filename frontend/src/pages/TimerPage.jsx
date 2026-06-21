@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useTimer } from '../hooks/useTimer.js'
-// VỊ TRÍ 1: Đã bổ sung scheduledTask vào hàng import
+// POSITION 1: Added scheduledTask to the import line
 import { task, timeEntry, scheduledTask } from '../services/api.js'
 import { formatTime, formatDuration, todayDate, nowDateTime } from '../utils/format-time.js'
 import styles from './TimerPage.module.css'
@@ -32,16 +32,16 @@ export default function TimerPage() {
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef(null)
 
-  // VỊ TRÍ 2: Thêm state lưu lịch trình thực tế từ Database
+  // POSITION 2: Add state to store actual schedule from Database
   const [schedules, setSchedules] = useState([])
 
-  // STATE THEO DÕI THỜI GIAN THỰC ĐỂ TỰ ĐỘNG ĐẢO TASK
+  // STATE FOR REAL-TIME TRACKING TO AUTOMATICALLY ROTATE TASKS
   const [currentMinutes, setCurrentMinutes] = useState(() => {
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes();
   });
 
-  // Cập nhật phút hiện tại sau mỗi 30 giây để widget luôn chính xác
+  // Update current minutes every 30 seconds to keep the widget accurate
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -69,16 +69,16 @@ export default function TimerPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [selectedTaskId, tasks])
 
-  // VỊ TRÍ 3: Gọi song song cả 3 API (bao gồm cả scheduledTask.list)
+  // POSITION 3: Call all 3 APIs in parallel (including scheduledTask.list)
   async function loadData() {
     const [taskList, entries, scheduleList] = await Promise.all([
       task.list(token),
       timeEntry.list(token, todayDate()),
-      scheduledTask.list(token, todayDate()) // <--- Lấy lịch hẹn của ngày hôm nay
+      scheduledTask.list(token, todayDate()) // <--- Fetch today's schedule
     ])
     setTasks(taskList)
     setTodayEntries(entries)
-    setSchedules(scheduleList) // <--- Lưu vào state vừa tạo
+    setSchedules(scheduleList) // <--- Save to the newly created state
 
     const active = entries.find(e => !e.end_time)
     if (active) {
@@ -140,7 +140,7 @@ export default function TimerPage() {
       setActiveEntryId(entry.id)
       timer.start(totalToday) 
     } catch (err) {
-      if (err.status === 409) alert('Bạn đã có bản ghi đang chạy')
+      if (err.status === 409) alert('You already have a running record')
     } finally {
       setStarting(false)
     }
@@ -165,46 +165,46 @@ export default function TimerPage() {
       setSearchTerm(getTaskTitle(entry.task_id))
       timer.start(totalToday) 
     } catch (err) {
-      if (err.status === 409) alert('Bạn đang có phiên khác chạy')
-      else alert('Có lỗi xảy ra')
+      if (err.status === 409) alert('You have another session running')
+      else alert('An error occurred')
     }
   }
 
-  const getTaskTitle = (taskId) => tasks.find(t => t.id === taskId)?.title || 'Không rõ'
+  const getTaskTitle = (taskId) => tasks.find(t => t.id === taskId)?.title || 'Unknown'
   const getTaskColor = (taskId) => tasks.find(t => t.id === taskId)?.color || '#6C757D'
 
   const filteredTasks = tasks.filter(t => 
     t.title.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  // VỊ TRÍ 4: Sửa toàn bộ Logic toán học để đọc chuẩn theo bảng dữ liệu `scheduled_tasks`
+  // POSITION 4: Fix the entire mathematical logic to correctly read from the 'scheduled_tasks' data table
   const timeToMinutes = (timeStr) => {
     if (!timeStr) return 0;
     const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
   };
 
-  // Lọc lấy các lịch trình chưa hoàn thành (is_completed = false) từ bảng scheduled_tasks
+  // Filter incomplete schedules (is_completed = false) from the scheduled_tasks table
   const activeSchedules = schedules.filter(s => !s.is_completed);
 
-  // 1. Nửa trên: Chưa đến hạn (start_time >= thời gian hiện tại)
-  // Sắp xếp: Xa nhất -> Gần nhất (Giảm dần theo thời gian)
+  // 1. Top half: Upcoming (start_time >= current time)
+  // Sort: Furthest -> Closest (Descending by time)
   const upcomingTasks = activeSchedules
     .filter(s => timeToMinutes(s.start_time) >= currentMinutes)
     .sort((a, b) => timeToMinutes(b.start_time) - timeToMinutes(a.start_time));
 
-  // 2. Nửa dưới: Đã quá hạn (start_time < thời gian hiện tại)
-  // Sắp xếp: Vừa mới hết hạn -> Hết hạn lâu rồi (Giảm dần theo thời gian)
+  // 2. Bottom half: Overdue (start_time < current time)
+  // Sort: Just expired -> Long time expired (Descending by time)
   const overdueTasks = activeSchedules
     .filter(s => timeToMinutes(s.start_time) < currentMinutes)
     .sort((a, b) => timeToMinutes(b.start_time) - timeToMinutes(a.start_time));
 
 
   return (
-    /* Giao diện Layout 2 Cột */
+    /* 2-Column Layout Interface */
     <div style={{ display: 'flex', width: '100%', gap: '30px', alignItems: 'flex-start', padding: '10px' }}>
       
-      {/* CỘT TRÁI: TIMER VÀ LOG TODAY */}
+      {/* LEFT COLUMN: TIMER AND TODAY'S LOG */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div className={styles.page} style={{ padding: 0, display: 'block' }}>
           <div className={styles.timerSection}>
@@ -346,7 +346,7 @@ export default function TimerPage() {
                   </div>
                 </div>
 
-                <button type="submit" className={styles.quickSave}>Tạo & chọn</button>
+                <button type="submit" className={styles.quickSave}>Create & Select</button>
               </form>
             )}
 
@@ -355,7 +355,7 @@ export default function TimerPage() {
             </div>
 
             {timer.isRunning ? (
-              <button className={styles.stopBtn} onClick={handleStop}>Dừng lại</button>
+              <button className={styles.stopBtn} onClick={handleStop}>Stop</button>
             ) : (
               <button className={styles.startBtn} onClick={handleStart}
                 disabled={!selectedTaskId || starting}>
@@ -391,7 +391,7 @@ export default function TimerPage() {
                       style={{ marginLeft: '10px', cursor: 'pointer', border: 'none', background: 'transparent' }}
                       onClick={() => handleContinue(entry.id)}
                       disabled={timer.isRunning}
-                      title="Tiếp tục"
+                      title="Continue"
                     >
                       ▶
                     </button>
@@ -404,7 +404,7 @@ export default function TimerPage() {
       </div>
 
       {/* ======================================================== */}
-      {/* CỘT PHẢI: Đã chỉnh sửa để map đúng cấu trúc object schedule */}
+      {/* RIGHT COLUMN: Modified to correctly map the schedule object structure */}
       {/* ======================================================== */}
       <div style={{
         width: '380px',
@@ -420,45 +420,45 @@ export default function TimerPage() {
         top: '10px'
       }}>
         
-        {/* NỬA TRÊN: CHƯA ĐẾN HẠN (XA ĐẾN GẦN) */}
+        {/* TOP HALF: UPCOMING (FURTHEST TO CLOSEST) */}
         <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', width: '100%' }}>
             <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#2b2b2b', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4361EE' }}></span>
-              Lịch trình sắp tới
+              Upcoming Schedule
             </h4>
-            <span style={{ fontSize: '11px', color: '#999', marginLeft: 'auto' }}>Xa nhất → Gần nhất</span>
+            <span style={{ fontSize: '11px', color: '#999', marginLeft: 'auto' }}>Furthest → Closest</span>
           </div>
           
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {upcomingTasks.length > 0 ? (
               upcomingTasks.map(s => (
                 <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f4f7ff', borderRadius: '10px', border: '1px solid #e1e8ff' }}>
-                  {/* Dùng getTaskTitle() để truy vết tên từ task_id */}
+                  {/* Use getTaskTitle() to trace name from task_id */}
                   <span style={{ fontSize: '13px', fontWeight: 500, color: '#333' }}>{getTaskTitle(s.task_id)}</span>
-                  {/* Format lại chuỗi TIME (HH:mm) để bỏ phần giây :00 */}
+                  {/* Reformat TIME string (HH:mm) to remove seconds :00 */}
                   <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', background: '#4361EE', color: '#fff', borderRadius: '6px' }}>
                     {s.start_time ? s.start_time.slice(0, 5) : ''}
                   </span>
                 </div>
               ))
             ) : (
-              <p style={{ fontSize: '12px', color: '#aaa', textAlign: 'center', margin: 'auto' }}>Không có lịch trình sắp tới</p>
+              <p style={{ fontSize: '12px', color: '#aaa', textAlign: 'center', margin: 'auto' }}>No upcoming schedules</p>
             )}
           </div>
         </div>
 
-        {/* ĐƯỜNG PHÂN CHIA GIỮA ĐÔI CARD */}
+        {/* DIVIDER BETWEEN CARDS */}
         <div style={{ borderTop: '1px dashed #e0e0e0', margin: '0 16px' }}></div>
 
-        {/* NỬA DƯỚI: ĐÃ QUÁ HẠN TRONG NGÀY (VỪA QUÁ HẠN ĐẾN LÂU) */}
+        {/* BOTTOM HALF: OVERDUE TODAY (RECENTLY EXPIRED TO LONG TIME EXPIRED) */}
         <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'rgba(239, 71, 111, 0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', width: '100%' }}>
             <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#EF476F', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EF476F' }}></span>
-              Đã quá hạn hôm nay
+              Overdue Today
             </h4>
-            <span style={{ fontSize: '11px', color: '#EF476F', opacity: 0.8, marginLeft: 'auto' }}>Mới hết → Hết lâu</span>
+            <span style={{ fontSize: '11px', color: '#EF476F', opacity: 0.8, marginLeft: 'auto' }}>Just Expired → Long Expired</span>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -474,7 +474,7 @@ export default function TimerPage() {
                 </div>
               ))
             ) : (
-              <p style={{ fontSize: '12px', color: '#aaa', textAlign: 'center', margin: 'auto' }}>Tuyệt vời! Không có task quá hạn</p>
+              <p style={{ fontSize: '12px', color: '#aaa', textAlign: 'center', margin: 'auto' }}>Great! No overdue tasks</p>
             )}
           </div>
         </div>
