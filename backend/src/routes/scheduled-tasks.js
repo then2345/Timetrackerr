@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// POST: Giữ nguyên logic Phương án 1 của bạn (đã rất tốt)
+// POST: Thêm lịch trình mới (Đã cập nhật để nhận Deadline)
 router.post('/', async (req, res) => {
   try {
     const { 
@@ -45,7 +45,9 @@ router.post('/', async (req, res) => {
       category, 
       color, 
       scheduled_date, 
-      start_time 
+      start_time,
+      deadline_date, // <-- Hứng thêm deadline_date từ frontend
+      deadline_time  // <-- Hứng thêm deadline_time từ frontend
     } = req.body
 
     if (!scheduled_date) {
@@ -67,10 +69,18 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing valid task_id' })
     }
 
+    // === CẬP NHẬT: Thêm 2 cột deadline vào câu lệnh INSERT ===
     const [result] = await pool.execute(
-      `INSERT INTO scheduled_tasks (user_id, task_id, scheduled_date, start_time) 
-       VALUES (?, ?, ?, ?)`,
-      [req.user.id, finalTaskId, scheduled_date, start_time || null]
+      `INSERT INTO scheduled_tasks (user_id, task_id, scheduled_date, start_time, deadline_date, deadline_time) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        req.user.id, 
+        finalTaskId, 
+        scheduled_date, 
+        start_time || null,
+        deadline_date || null, // Nếu không nhập sẽ lưu NULL
+        deadline_time || null  // Nếu không nhập sẽ lưu NULL
+      ]
     )
 
     const [rows] = await pool.execute(

@@ -42,11 +42,16 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(false)
   const [showScheduleForm, setShowScheduleForm] = useState(false)
 
-  // --- FULL FORM STATES (Bê nguyên từ Form Gốc + Thêm Date/Time) ---
+  // --- FULL FORM STATES ---
   const [formTaskId, setFormTaskId] = useState('new')         
   const [formTaskName, setFormTaskName] = useState('')
   const [formScheduledDate, setFormScheduledDate] = useState('') 
   const [formStartTime, setFormStartTime] = useState('09:00') 
+  
+  // === THÊM STATE CHO DEADLINE ===
+  const [formDeadlineDate, setFormDeadlineDate] = useState('')
+  const [formDeadlineTime, setFormDeadlineTime] = useState('17:00') // Mặc định cuối ngày làm việc nghỉ ngơi
+  
   const [formDuration, setFormDuration] = useState(60)    
   const [formCategory, setFormCategory] = useState('Study')
   const [formColor, setFormColor] = useState('#4C6EF5')
@@ -67,10 +72,11 @@ export default function CalendarPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Synchronize default start date when a user clicks a calendar cell
+  // Synchronize default start date & deadline date when a user clicks a calendar cell
   useEffect(() => {
     if (selectedDate) {
       setFormScheduledDate(selectedDate)
+      setFormDeadlineDate(selectedDate) // Đồng bộ ngày deadline mặc định trùng ngày bắt đầu
     }
   }, [selectedDate])
 
@@ -92,7 +98,6 @@ export default function CalendarPage() {
       setFormColor(matchedTask.color || '#4C6EF5')
       setFormCategory(matchedTask.category || 'Study')
     } else {
-      // Otherwise, it is treated as a brand new task creation dynamically
       setFormTaskId('new')
     }
   }
@@ -113,29 +118,27 @@ export default function CalendarPage() {
   }, [tasks, formTaskName])
 
   const fetchMonthData = useCallback(async (year, month) => {
-  if (!token) return;
-  setLoading(true);
-  try {
-    // Lấy ngày đầu tháng và cuối tháng theo chuẩn YYYY-MM-DD
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    // Hàm format này cần trả về YYYY-MM-DD
-    const from = firstDay.toISOString().slice(0, 10);
-    const to = lastDay.toISOString().slice(0, 10);
+    if (!token) return;
+    setLoading(true);
+    try {
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      
+      const from = firstDay.toISOString().slice(0, 10);
+      const to = lastDay.toISOString().slice(0, 10);
 
-    const [entryList, scheduledList] = await Promise.all([
-      timeEntry.listRange(token, from, to),
-      scheduledTask.listRange(token, from, to),
-    ]);
-    setEntries(entryList);
-    setScheduled(scheduledList);
-  } catch (err) {
-    console.error("Fetch data error:", err);
-  } finally {
-    setLoading(false);
-  }
-}, [token]);
+      const [entryList, scheduledList] = await Promise.all([
+        timeEntry.listRange(token, from, to),
+        scheduledTask.listRange(token, from, to),
+      ]);
+      setEntries(entryList);
+      setScheduled(scheduledList);
+    } catch (err) {
+      console.error("Fetch data error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
   useEffect(() => {
     fetchMonthData(currentYear, currentMonth)
@@ -190,16 +193,6 @@ export default function CalendarPage() {
     return tasks.find(t => t.id === taskId)?.color || '#6C757D'
   }
 
-  async function handleToggleComplete(item) {
-    try {
-      const updated = await scheduledTask.update(token, item.id, {
-        is_completed: !item.is_completed, 
-      })
-      setScheduled(prev => prev.map(s => (s.id === item.id ? { ...s, ...updated } : s)))
-    } catch {
-    }
-  }
-
   async function handleDeleteScheduled(id) {
     if (!confirm('Are you sure to delete this task?')) return
     try {
@@ -214,9 +207,17 @@ export default function CalendarPage() {
     if (!formScheduledDate || !formTaskName.trim()) return
     setSubmitting(true)
     try {
+      // Format Start Time
       const [hours, minutes] = formStartTime.split(':').map(Number)
       const timeOnly = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
       
+      // === FORMAT DEADLINE TIME (NẾU CÓ) ===
+      let deadlineTimeOnly = undefined
+      if (formDeadlineTime) {
+        const [dlHours, dlMinutes] = formDeadlineTime.split(':').map(Number)
+        deadlineTimeOnly = `${String(dlHours).padStart(2, '0')}:${String(dlMinutes).padStart(2, '0')}:00`
+      }
+
       await scheduledTask.create(token, {
         task_id: formTaskId === 'new' ? null : Number(formTaskId),          
         new_task_title: formTaskId === 'new' ? formTaskName.trim() : undefined,
@@ -224,13 +225,18 @@ export default function CalendarPage() {
         color: formColor,
         scheduled_date: formScheduledDate, 
         start_time: timeOnly,                  
-        estimated_duration: formDuration * 60
+        estimated_duration: formDuration * 60,
+        
+        // === GỬI THÊM TRƯỜNG DEADLINE LÊN BACKEND ===
+        deadline_date: formDeadlineDate || null,
+        deadline_time: deadlineTimeOnly || null
       })
       
       setShowScheduleForm(false)
       setFormTaskId('new')
       setFormTaskName('')
       setFormStartTime('09:00')
+      setFormDeadlineTime('17:00')
       setFormDuration(60)
       
       await fetchMonthData(currentYear, currentMonth)
@@ -310,7 +316,6 @@ export default function CalendarPage() {
             </button>
           </div>
 
-          {/* FULL FORM LOGIC FROM CAPTURE_2.PNG + ADDED DATE & TIME */}
           {showScheduleForm && (
             <form className={styles.scheduleForm} onSubmit={handleCreateScheduled}>
               
@@ -378,7 +383,7 @@ export default function CalendarPage() {
                 )}
               </div>
 
-              {/* 2. START DATE (ADDED SPECIFICALLY FOR CALENDAR) */}
+              {/* 2. START DATE */}
               <div className={styles.formField}>
                 <label>Start Date</label>
                 <input
@@ -389,7 +394,7 @@ export default function CalendarPage() {
                 />
               </div>
 
-              {/* 3. START TIME (ADDED SPECIFICALLY FOR CALENDAR) */}
+              {/* 3. START TIME */}
               <div className={styles.formField}>
                 <label>Start Time</label>
                 <input
@@ -400,7 +405,27 @@ export default function CalendarPage() {
                 />
               </div>
 
-              {/* 4. ESTIMATE TIME (FROM ORIGINAL FORM) */}
+              {/* === BỔ SUNG THÊM: 4. DEADLINE DATE === */}
+              <div className={styles.formField}>
+                <label>Deadline Date</label>
+                <input
+                  type="date"
+                  value={formDeadlineDate}
+                  onChange={e => setFormDeadlineDate(e.target.value)}
+                />
+              </div>
+
+              {/* === BỔ SUNG THÊM: 5. DEADLINE TIME === */}
+              <div className={styles.formField}>
+                <label>Deadline Time</label>
+                <input
+                  type="time"
+                  value={formDeadlineTime}
+                  onChange={e => setFormDeadlineTime(e.target.value)}
+                />
+              </div>
+
+              {/* 6. ESTIMATE TIME */}
               <div className={styles.formField}>
                 <label>Estimate Time</label>
                 <select value={formDuration} onChange={e => setFormDuration(Number(e.target.value))}>
@@ -410,7 +435,7 @@ export default function CalendarPage() {
                 </select>
               </div>
 
-              {/* 5. CATEGORY (FROM ORIGINAL FORM - Locked if Auto-filled) */}
+              {/* 7. CATEGORY */}
               <div className={styles.formField}>
                 <label>Category</label>
                 <select 
@@ -424,7 +449,7 @@ export default function CalendarPage() {
                 </select>
               </div>
 
-              {/* 6. COLOR PICKER (FROM ORIGINAL FORM - Locked if Auto-filled) */}
+              {/* 8. COLOR PICKER */}
               <div className={styles.formField}>
                 <label>Color</label>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
@@ -483,7 +508,7 @@ export default function CalendarPage() {
             </ul>
           )}
 
-          {/* Scheduled List - Thay đổi từ Checkbox sang Bullet Point */}
+          {/* Scheduled List */}
           <div className={styles.sectionTitle}>Scheduled ({selectedDateScheduled.length})</div>
           {selectedDateScheduled.length === 0 ? (
             <p className={styles.empty}>No record</p>
@@ -491,7 +516,6 @@ export default function CalendarPage() {
             <ul className={styles.scheduledList}>
               {selectedDateScheduled.map(item => (
                 <li key={item.id} className={styles.scheduledItem}>
-                  {/* Dấu chấm đầu dòng thay cho Checkbox */}
                   <span 
                     className={styles.bulletDot} 
                     style={{ backgroundColor: item.task_color || '#4C6EF5' }} 
